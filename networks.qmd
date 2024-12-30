@@ -1,0 +1,4 @@
+# Networked experiments {#sec-network}
+
+more complex interfence, e.g., from a general network structure; LNM and extensions; examples to illustrate challenges and methods; future work (causal inference, tech applications, large networks).
+

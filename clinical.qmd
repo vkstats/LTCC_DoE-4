@@ -1,0 +1,4 @@
+# Clinical trials and agricultural experiments with interference {#sec-clinical}
+
+clinical experiments (cross-over trials, cluster-randomisation; carry-over);
+

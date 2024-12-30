@@ -1,0 +1,3 @@
+# Experiments with interference {#sec-interference-intro}
+
+intro (what, why, when); examples; SUTVA and violations;  

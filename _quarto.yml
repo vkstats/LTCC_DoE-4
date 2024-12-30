@@ -1,0 +1,54 @@
+project:
+  title: LTCC_DoE-4
+  type: book
+  output-dir: _book
+
+book:
+  title: "LTCC Design of Experiments"
+  subtitle: "Week 4: Interference and Multi-Objective Experimentation"
+  author: 
+  - name: Vasiliki Koutra
+    email: Vasiliki.Koutra@kcl.ac.uk
+    url: https://www.kcl.ac.uk/people/vasiliki-koutra
+    affiliations: 
+    - King's College London
+  date: last-modified
+  cover-image: images/spectral_clustering.jpg
+  cover-image-alt: |
+    Subset of the Facebook network from the Stanford data collection <snap.stanford.edu/data/egonets-Facebook.html>
+  chapters:
+    - index.qmd
+    - introduction.qmd
+    - part: interference.qmd
+      chapters: 
+        - clinical.qmd
+        - networks.qmd
+    - part: multi.qmd
+      chapters: 
+        - model_robust.qmd
+        - moode.qmd
+    - summary.qmd
+    - references.qmd
+    
+  page-footer:
+    left: |
+      Copyright 2024, [Vasiliki Koutra](mailto:V.Koutra@kcl.ac.uk)
+    right: |
+      This book was built with <a href="https://quarto.org/">Quarto</a>.
+  sidebar:
+    title: "Week 4: Interference and Multi-Objective Experimentation"
+
+citation:
+  author: V. Koutra 
+  type: manuscript
+
+bibliography: references.bib
+
+format:
+  html:
+    theme: cosmo
+  pdf:
+    documentclass: scrreprt
+
+
+

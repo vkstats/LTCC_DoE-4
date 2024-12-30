@@ -1,0 +1,19 @@
+# Introduction {.unnumbered}
+
+In Weeks 1-3, you were (re-) introduced to some of the fundamental topics in design of experiments, including randomisation, factorial treatment structure, response surface methods and optimal design. To a greater or lesser degree, these ideas and principles are dependent on a number of assumptions holding:
+
+- that the expected response from a given unit only depends on the treatment applied to that unit, and not on the treatments applied to any other units (*stable unit treatment value assumption*);
+
+- for factorial, response surface and optimal designs, that a reasonable approximating statistical model can be specified that leads to unbiased estimation of quantities of interest;
+
+- for optimal designs, that the aim of the experiment can be neatly encapsulated in a single mathematical expression or objective function.
+
+This week, we will focus on approaches that allow us to relax one or the other of these assumptions:
+
+- in Part 1 (Experiments with interference), we will introduce methods for designing and analysing experiments when *treatment interference* is anticipated. In particular, with the aim of estimating both *direct* and *indirect* treatment effects, i.e., the effects both from applying the treatment to a given unit and from applying, possible different treatments, to connected units;
+
+- in Part 2 (Multi-objective experimentation), we will introduce *multi-objective* (compound) design optimality criteria that address multiple experimental aims simultaneously. A particular focus will be robust designs that allow for lack-of-fit testing and acknowledge model inadequacy. 
+
+Both topics are active research areas. As such, these notes are just a snapshot summary of current work, and links will be provided to related literature.
+
+

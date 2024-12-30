@@ -1,0 +1,4 @@
+# Model-robust design and lack-of-fit {#sec-model-robust}
+
+issues with "standard" optimal design, esp. model dependency;
+

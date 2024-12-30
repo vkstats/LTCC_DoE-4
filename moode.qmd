@@ -1,0 +1,3 @@
+# Multi-objective optimal design {#sec-multiobj}
+
+combining criteria for different aims (compound, constrained, Pareto fronts); MOODEs for model-robust inference; `R` package and examples.

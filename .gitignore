@@ -1,0 +1,11 @@
+.DS_Store
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+_book
+readme.qmd
+
+/.quarto/
+.httr-oauth
+.quarto

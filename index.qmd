@@ -1,0 +1,20 @@
+# Welcome {.unnumbered}
+
+These lecture notes support Week 4 of the [London Taught Course Centre](https://www.ltcc.ac.uk) 2024-25 advanced module on "Design of Experiments".
+
+The main focus is on two areas - experimental design under treatment interference and multi-objective experimental design - that are active research areas. As such, do not necessarily expect all the material to align with nice tidy results!
+
+::: {.content-visible when-format="html"}
+::: {style="font-size: 75%;"}
+Figure attribution: Subset of the [Facebook network](http://snap.stanford.edu/data/egonets-Facebook.html) from the Stanford Data Collection.
+:::
+:::
+
+
+## About {.unnumbered}
+
+I am a [Lecturer in Statistics](https://www.kcl.ac.uk/people/vasiliki-koutra) in the [Department of Mathematics](https://www.kcl.ac.uk/mathematics) at [King's College London](https://www.kcl.ac.uk). My research interests are in the design of experiments, particularly experiments with connected units. I have recently developed a new module on Design of Experiments for King's MSc and undergraduate programmes.
+
+## Acknowledgments {.unnumbered}
+
+These notes are largely based on joint research with [Professor Steve Gilmour](https://www.kcl.ac.uk/people/steven-gilmour), [Dr Ben Parker](https://www.brunel.ac.uk/people/ben-parker), [Dr Olga Egorova](https://www.kcl.ac.uk/people/olga-egorova), [Andrew Mead](https://www.rothamsted.ac.uk/people/andrew-mead) and [Professor Luzia Trinca](http://portaldocentes.unesp.br/portaldocentes/docentes/67765). Material in Part 2 is partly based on a short course given by Gilmour and Egorova at the [2024 Fall Technical Conference](https://falltechnicalconference.org/wp-content/uploads/2024/10/2024_FTC_Program_Book.pdf).
