@@ -1,3 +1,36 @@
 # Experiments with interference {#sec-interference-intro}
 
+<!--
 intro (what, why, when); examples; SUTVA and violations;  
+-->
+
+We will start with a standard model for analysing a designed experiment,
+
+$$
+y_{i} = \mu + \tau_{r(i)} + \varepsilon_i\,,
+$$ {#eq-additive-model}
+with the aim of estimating treatment differences $\tau_j - \tau_k$. Here, $r(i) \in \{1,\ldots,t\}$ indicates which treatment was allocated to the $i$th unit ($i = 1,\ldots,n$).
+
+This model makes the **stable unit treatment value assumption (SUTVA)**, which states that the response from any particular unit is unaffected by the assignment of treatments to other units [@cox1958, §2.4].
+
+Consider three different experiments.
+
+1. A clinical trial, e.g., for an antidepressant, where different medical treatments are to be compared using a set of patients. The experiment is split into (time) periods, and within a period, each patient will be assigned one of the treatments. Across the whole experiment, each patient will be assigned all the treatments.
+
+2. An agricultural experiment, e.g., comparing different varieties of wheat. The field available for the experiment is split into different plots, with one treatment assigned to each plot.
+
+3. A marketing experiment to assess the effectiveness of different adverts, e.g., on a social media platform. Each user on (a subset of) the platform will be shown one of the different adverts.
+
+What do all three of these experiments have in common? In each case, it may be necessary to consider the impact of **treatment interference** (or treatment carryover or spillover).
+
+1. The clinical response obtained from the application of an antidepressant in a given period may also be affected by the treatment applied in the preceding period.
+
+1. The response, e.g., crop yield, from a given plot may be affected by the variety of wheat applied to neighbouring plots, due to shading or attractiveness to pests.
+
+1. The response from a particular social media user to an advert may be influenced by the adverts seen by their connections or friends.
+
+Ignoring substantial treatment interference, as in model ([-@eq-additive-model]), can lead to biased estimates of differences between the **direct** treatment effects $t_r$.
+
+In some experiments, it may be possible and sufficient to mitigate any treatment interference through adjustments to the experimental protocol; for example, by adding "wash-out" periods between treatments in the clinical trial or "guard plots" between treated plots in the agricultural experiment. But in many cases this may not be possible (is it ethical to have patients untreated in a clinical trial?) or there may be interest in the **indirect** effect of each treatment; for example, the **viral** effect of the adverts in the marketing experiment.
+
+Hence, it is of interest to study designs and models which account for treatment interference.

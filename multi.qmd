@@ -1,3 +1,20 @@
 # Multi-objective experimentation {#sec-multiobj-intro}
 
-no practical experiment has a single aim (list from Box?);  
+Various authors have written summary "checklists" for planning experiments, with items similar to "define the objectives" and "specify the model". See @dvd2017 for one example. In general, such lists recognise (a) the conflicting nature of many of the former; and (b) the a priori uncertainty in the latter.
+
+Adopting a multi-objective approach to the design of the experiment directly addresses the first of these concerns, and can also be used to tackle the second problem. In Week 3, you have already seen some discussion of these issues. Broadly speaking, we could use a Pareto, constrained or compound approach to the problem of finding a single experimental design that can tackle a set of, possibly competing, objectives (e.g., @cc1996, @lal2014).
+
+Following @eg2023, Our focus here will be on using multi-objective optimal designs to address uncertainty in the assumed by model by combing individual criteria that target (i) inference for an assumed model; (ii) the ability of identify model lack-of-fit; and (iii) minimum mean squared error, including bias from model misspecification. We will discuss such methods in the context of **response surface models** of the form
+
+
+$$
+\begin{split}
+    Y_i & = \beta_0 + \sum_{j = 1} ^ {p} \beta_j x_{ij} + \varepsilon_{i} \\
+    & = \beta_0 + \boldsymbol{x}_{i1}^{\mathrm{T}}\boldsymbol{\beta}_1 + \varepsilon_{i}\,,
+\end{split}
+$${#eq-rsm}
+
+with $\beta_0$ and $\boldsymbol{\beta}_1^{\mathrm{T}} = (\beta_1, \ldots, \beta_{p})$ containing unknown parameters to be estimated, and $\boldsymbol{x}_{i1}^{\mathrm{T}} = (x_{i1}, \ldots, x_{ip})$ the values of the $p$ predictors for the $i$th run. The unit effects (errors) $\varepsilon_{i}$ have expectation zero and constant variance $\sigma^2$, with $\varepsilon_{i}, \varepsilon_{i^\prime}$ assumed independent for $i \neq i^\prime$. The $p$ predictors may include linear terms in the $k$ factors, higher-order polynomial terms and interactions.
+
+
+

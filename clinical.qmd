@@ -1,4 +1,248 @@
-# Clinical trials and agricultural experiments with interference {#sec-clinical}
+# Clinical trials with interference {#sec-clinical}
 
-clinical experiments (cross-over trials, cluster-randomisation; carry-over);
+```{r}
+#| include: false
+#| file: packages.R
+```
 
+## Cross-over trials
+
+The most common form of clinical trial is a *parallel group* trial, where each subject is allocated to a single treatment, and treatment comparisons are made between the groups. In contrast, in a **cross-over trial**, each subject is assigned a sequence of treatments across different periods. Interest is typically still in comparing individual treatments, not sequences, and the experimental units in such a trial, to which treatments can be applied, are the periods within each subject.
+
+Cross-over trials are common in studies of chronic medical conditions, where repeated treatment of a disease is required. Single subject ("N of 1") trials are a special case of cross-over trials using a single patient to determine personalised medicine results. Cross-over trials may not be appropriate for trials on acute conditions.
+
+The main advantages of cross-over trials is that each subject acts as their own control, and treatment comparisons can be made "within subject" and hence are less affected by subject-to-subject variability (e.g., caused by unmeasured and unadjusted covariates). Hence, treatment comparisons could be statistically more efficient than when using a parallel group trial.
+
+However, this feature of within subject comparison can also bring disadvantages. Principally,
+
+- the **order** in which the treatments are applied may impact the outcome, especially if one or more of the treatments have adverse side effects.
+- most pertinently for us here, there may be **treatment interference** between periods of the design (typically called *carry-over* in a cross-over trial). That is, the outcome from period $i$ may depend on the treatment applied in period $i-1$ (first-order interference) or even from earlier periods.
+
+It is quite common to try to mitigate potential interference by building in wash-out periods between treatment periods in the trial, to allow the subjects to recover from each treatment. However, ensuring this is effective requires knowledge of the pharmacodynamics of the different treatments which may be unknown or uncertain. In some studies, it may not be ethical to pause treatment for a wash-out. Therefore, it is wise to plan for the possibility of interference in the design and analysis of the trial.
+
+Methodology for the design and analysis of cross-over trials is discussed in the book by @jk2015 and the review chapter by @bd2015.
+
+### 2x2 cross-over trial
+
+The simplest form of cross-over design concerns $t=2$ treatments and $p=2$ periods, the so-called $2\times 2$ trial. There are clearly only two possible sequences, see @tbl-AB, and each subject in the trial is randomised to one of the two. As discussed above, a wash-out period is usually inserted between the two treatment periods.
+
+```{r}
+#| label: tbl-AB
+#| tbl-cap: Sequences for a 2x2 cross-over trial.
+AB <- data.frame(
+  sequence = rep(1:2, c(2, 2)),
+  period = rep(1:2, 2),
+  trt = c("A", "B", "B", "A")
+)
+AB |> 
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:2)),
+        align = rep("c", 3))
+```
+
+An example of a $2\times 2$ trial to investigate the efficacy of an inhaled drug (A), compared to a control (B), for patients suffering from chronic obstructive pulmonary disease (COPD). Subjects used either A or B twice daily for four weeks (period 1) before switching to the other treatment for the following four weeks. The response was the mean expiratory flow rate (PEFR) based on readings recorded each morning by the subjects. Data for 54 subjects enrolled in the trial are given in @tbl-pefr. The first 27 subjects had been randomised to the sequence AB, and next 27 to the sequence BA.
+
+```{r}
+#| label: tbl-pefr
+#| tbl-cap: Mean morning PEFR (L/min) from a $2\times 2$ cross-over trial [adapted from @jk2015, ch. 2]. 
+#| message: false
+pefr <- read_csv(here("data", "pefr.csv"), show_col_types = FALSE) |>
+  clean_names() |>
+  slice(1:54)
+pefr_AB <- pefr |>
+  filter(sequence == "AB")
+pefr_BA <- pefr |>
+  filter(sequence == "BA") 
+bind_cols(pefr_AB, pefr_BA) |>
+  select(c(1, 3, 4, 5, 7, 8)) |>
+  kable(col.names = rep(c("Subject", "Period 1", "Period 2"), 2)) |>
+  add_header_above(c("Sequence AB" = 3, "Sequence BA" = 3))
+```
+
+The traditional linear model used with cross-over experiments contains terms corresponding to subjects, period, treatment and interference:
+
+$$
+\begin{split}
+y_{ij} = \mu + \alpha_i + \beta_j + \tau_{r(i,j)} + \rho_{r(i-1,j)} + \varepsilon_{ij}\,,\\ i = 1,\ldots,p;\, j = 1,\ldots, n\,,
+\end{split}
+$$ {#eq-crossmod}
+
+where $y_{ij}$ is the response from the $j$th subject in the $i$th period, $r(i,j) \in \{1,\ldots,t\}$ denotes the treatment allocated to the $j$th subject in the $i$th period, $\mu$ is a general mean, $\alpha_i$ is the $i$th period effect, $\beta_j$ is the $j$th subject effect, $\tau_{r(i,j)}$ is the direct effect of treatment $r(i,j)$ and $\rho_{r(i-1,j)}$ is the interference (indirect, carry-over) effect of treatment $r(i-1,j)$. We define indirect effect $\rho_{r(0,j)}=0$, for $j=1,\ldots,n$, to reflect the lack of interference in period 1. The error terms $\varepsilon_{ij}$ are uncorrelated random variables with zero mean and constant variance $\sigma^2$. 
+
+Before we fit model ([-@eq-crossmod]), it is informative to fit related models corresponding to different experiment formulations and assumptions. We start by fitting the model
+
+<!--
+$$
+y_{ij} = \mu + \alpha_i + \beta_j + \rho_{r(i-1,j)} + \varepsilon_{ij}\,,\quad i = 1,\ldots,p;\, j = 1,\ldots, n\,,
+$$
+-->
+$$
+\begin{split}
+y_{ij} = \mu + \alpha_i + \psi_{k} + \beta_{j^\prime|k} +  + \varepsilon_{ij}\,,\\
+i = 1,\ldots,p;\, j^\prime = 1,\ldots, n/s;\, k = 1,\ldots, s\,,
+\end{split}
+$$
+which investigates the effects $\psi_k$ of the $s$ *sequences* in the design, as a significant sequence effect, adjusted for a period effect, arises from an indirect treatment effect. Here, subject is now nested within sequence. This is equivalent to a parallel group trial to compare sequences on 54 subjects and hence, as sequences can only be compared *between* subjects, the correct error mean square for testing for a sequence difference is the between subjects residual, with 53 degrees of freedom, see @tbl-pefr-parallel. There is no evidence of a difference between sequences or, equivalently, no difference in interference between the two treatments. However, in general this test usually has very low power due to large subjec-to-subject variation. Hence we must be cautious in assuming a lack of statistical significance also means a lack of substantive interference. For the PEFR experiment, the clinicians did not expect treatment interference and hence we take lack of statistical significance as evidence for no carry-over.
+
+Note that the test in @tbl-pefr-parallel is (indirectly) testing $\rho_1 = \rho_2$, and not $\rho_1=\rho_2=0$. Hence, conclusions are being drawn about equality of interference from the two treatments, not about the presence or absence of treatment interference. 
+
+<!-- Subject nested within sequence -->
+
+```{r}
+#| label: tbl-pefr-parallel
+#| tbl-cap: Analysis of variance from PEFR parallel trial
+pefr_long <- pefr |> 
+  pivot_longer(cols = starts_with("period"), names_to = "period", values_to = "pefr")
+pefr_long <-  pefr_long |>
+  mutate(trt = case_when(
+    sequence == "AB" & period == "period_1" ~ "A",
+    sequence == "AB" & period == "period_2" ~ "B",
+    sequence == "BA" & period == "period_1" ~ "B",
+    .default = "A"
+    ) 
+  ) |>
+  mutate(subject = as.factor(subject))
+pefr_parallel <- aov(pefr ~ sequence + period + Error(subject), data = pefr_long)
+tidy(pefr_parallel) |>
+  mutate(term = case_when(
+                          row_number() == 2 ~ "between subject residual",
+                          row_number() == 4 ~ "within subject residual",
+                          .default = term)) |>
+  select(-stratum) |>
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) |>
+  kable(col.names = c("", "df", "Sum Sq.", "Mean Sq.", "F-value", "P-value"))
+```
+
+A standard two period crossover trial cannot allow for complete balance in the sense of each treatment following every other *including itself* (we have no cases of treatment A following A or B following B). Hence, when testing for a treatment difference we do need the assumption of no interference, $\rho_{1} = \rho_2$, to ensure the least squares estimate $\hat{\tau}_1 - \hat{\tau}_2$ is unbiased. If there is evidence of unequal treatment interference, we can use the data from one period only and estimate the treatment difference as if from a parallel group design. However, such an analysis will have much lower power.
+
+Assuming we are happy with the evidence supporting assumption of equal treatment interference, the experiment could also be analysed as a row-column design, using
+
+$$
+y_{ij} = \mu + \alpha_i + \beta_j + \tau_{r(i,j)} + \varepsilon_{ij}\,,\quad i = 1,\ldots,p;\, j = 1,\ldots, n\,.
+$$
+The corresponding analysis of variance is given in @tbl-pefr-rc, and shows a significant difference between treatments A and B.
+
+```{r}
+#| label: tbl-pefr-rc
+#| tbl-cap: Analysis of variance from PEFR row-column trial
+pefr_rc <- aov(pefr ~ period + trt + Error(subject), data = pefr_long)
+tidy(pefr_rc) |>
+  mutate(term = case_when(
+                          row_number() == 1 ~ "subjects",
+                          row_number() == 3 ~ "treatment",
+                          .default = term)) |>
+  select(-stratum) |>
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) |>
+  kable(col.names = c("", "df", "Sum Sq.", "Mean Sq.", "F-value", "P-value"))
+```
+
+Bringing together these different aspects, model ([-@eq-crossmod]) can be fitted, resulting in the analysis of variance in @tbl-pefr-co combining the tests performed above.
+
+```{r}
+#| label: tbl-pefr-co
+#| tbl-cap: Analysis of variance from PEFR cross-over trial
+pefr_co <- aov(pefr ~ sequence + period + trt + Error(subject), data = pefr_long)
+tidy(pefr_co) |>
+  mutate(term = case_when(
+                          row_number() == 1 ~ "sequence (interference)",
+                          row_number() == 2 ~ "between subject residual",
+                          row_number() == 4 ~ "treatment",
+                          row_number() == 5 ~ "within subject residual",
+                          .default = term)) |>
+  select(-stratum) |>
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) |>
+  kable(col.names = c("", "df", "Sum Sq.", "Mean Sq.", "F-value", "P-value"))
+```  
+
+### Larger cross-over trials
+
+The design of a $2\times 2$ trial is very simple. For larger numbers of treatments and periods, decisions are required on which sequences should be used.
+
+A **balanced** cross-over design has each treatment occuring the same number of times in each period, and each treatment follows every other treatment the same number of times, with no treatment following itself. Such a design has the property that every pair of estimated direct treatment differences, $\hat{\tau}_k = \hat{\tau}_l$ has the same variance. 
+
+For $p=t$ (number of periods equal to number of treatments), such designs can be constructed by combining complete sets of $t-1$ orthogonal Latin squares [@john1971, ch. 6], see @tbl-orthLS for the design when $p=t=4$. 
+
+```{r}
+#| label: tbl-orthLS
+#| tbl-cap: Orthogonal Latin square design for four treatments.
+ABCD1 <- data.frame(
+  sequence = rep(1:4, rep(4, 4)),
+  period = rep(1:4, 4),
+  trt = c("A", "B", "C", "D",
+          "B", "A", "D", "C",
+          "C", "D", "A", "B",
+          "D", "C", "B", "A")
+)
+ABCD2 <- data.frame(
+  sequence = rep(5:8, rep(4, 4)),
+  period = rep(1:4, 4),
+  trt = c("A", "D", "B", "C",
+          "B", "C", "A", "D",
+          "C", "B", "D", "A",
+          "D", "A", "C", "B")
+)
+ABCD3 <- data.frame(
+  sequence = rep(9:12, rep(4, 4)),
+  period = rep(1:4, 4),
+  trt = c("A", "C", "D", "B",
+          "B", "D", "C", "A",
+          "C", "A", "B", "D",
+          "D", "B", "A", "C")
+)
+bind_rows(ABCD1, ABCD2, ABCD3) |>
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:4)),
+        align = rep("c", 5)) |>
+  row_spec(c(4, 8), extra_css = "border-bottom: 2px solid") |>
+  row_spec(c(4, 8), hline_after = TRUE)
+```
+
+However, designs constructed in this way require a large number of sequences and are not very flexible. They may also lead to unncessarily large designs; e.g., using the squares from @tbl-orthLS requires the total number of subjects to be a multiple of 12. @williams1949 showed that balanced designs could be achieved using much smaller numbers of sequences. An example for $p=t=4$ with only four sequences is given in @tbl-balLS. This design uses many fewer sequences and could be employed with the number of subjects being a multiple of four.
+
+```{r}
+#| label: tbl-balLS
+#| tbl-cap: Balanced Latin square design for four treatments.
+bal_ABCD <- data.frame(
+  sequence = rep(1:4, rep(4, 4)),
+  period = rep(1:4, 4),
+  trt = c("A", "D", "B", "C",
+          "B", "A", "C", "D",
+          "C", "B", "D", "A",
+          "D", "C", "A", "B")
+)
+bal_ABCD |>
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:4)),
+        align = rep("c", 5))
+```
+
+Such balanced designs still cannot orthogonally estimate the direct and indirect treatment effects, as no treatment is followed by itself. A **strongly balanced** design is defined as one in which every treatment followed by every other treatment, including itself. In such a design, direct and indirect effects are estimated independently, simplifying the analysis and interpretation, and lowering the variance of estimators of the indirect effects. 
+
+If more than $t$ periods are possible, a simple way to generate such a design is to add an extra period that repeats the last period in a design with $p=t$ @lucas1957, see the example in @tbl-strbalLS.  
+
+```{r}
+#| label: tbl-strbalLS
+#| tbl-cap: Strongly balanced extra-period design for four treatments.
+strbal_ABCD <- data.frame(
+  sequence = rep(1:4, rep(5, 4)),
+  period = rep(1:5, 4),
+  trt = c("A", "D", "B", "C", "C",
+          "B", "A", "C", "D", "D",
+          "C", "B", "D", "A", "A",
+          "D", "C", "A", "B", "B")
+)
+strbal_ABCD |>
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:5)),
+        align = rep("c", 6))
+```
+
+Most standard construction methods for cross-over trials are combinatoric. However, designs can also be found via numerical optimisation, based on some optimality criteria. Often, this is the only approach for arbitrary numbers of treatments and periods, and for extensions to the traditional linear model (e.g., using mixed effect models).
+
+## Interference in other trials
+
+Interference can also occur in other trials, including parallel group trials without repeated treatment applications^[<https://clusterrandomisedtrials.qmul.ac.uk>]. Many examples occur in assessing public health interventions, where treatments are applied in the community and community members may interact. The links governing the interference may be much more complex than the simple, directed links in a cross-over trial.
+
+One mitigating strategy is the application of a **cluster randomised** trial (CRT), where all subjects in a cluster or group recieve the same treatment. While there are many other reasons to conduct a CRT (e.g., for practical or ethical purposes), typically clusters will be designed to limit possible treatment contamination between clusters (e.g., due to geographical distance). Within a cluster, all subjects will have received the same treatment, limiting the impact of interference.
+
+In other trials, the indirect effect of each treatment may be of interest in itself. A common case are vaccine trials, where the indirect protection provided by the vaccine is important. Then, methods are required for the design and modelling of experiments to estimate indirect and total effects [@hh2012].  

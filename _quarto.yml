@@ -32,7 +32,7 @@ book:
     
   page-footer:
     left: |
-      Copyright 2024, [Vasiliki Koutra](mailto:V.Koutra@kcl.ac.uk)
+      Copyright 2025, Vasiliki Koutra (KCL)
     right: |
       This book was built with <a href="https://quarto.org/">Quarto</a>.
   sidebar:
@@ -43,12 +43,23 @@ citation:
   type: manuscript
 
 bibliography: references.bib
+csl: journal-of-the-royal-statistical-society.csl
 
 format:
   html:
     theme: cosmo
+    css: style.css
+    code-fold: true
+    execute:
+      message: false
   pdf:
     documentclass: scrreprt
+    include-in-header:
+      text: |
+        \setlength{\defaultaddspace}{0pt}
+    execute:
+      echo: false
+      message: false
 
 
 

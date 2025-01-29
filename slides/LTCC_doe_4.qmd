@@ -1,0 +1,957 @@
+---
+title: "LTCC Design of Experiments"
+subtitle: "Week 4: Interence and Multi-objective Experimentation"
+author: "Vasiliki Koutra"
+format: 
+  html:
+    embed-resources: true
+    html-math-method: katex
+  pdf:
+    default
+  revealjs:
+    html-math-method: katex
+    embed-resources: true
+    smaller: true
+    scrollable: true
+    citations-hover: true
+    preview-links: true
+  beamer:
+    default
+format-links: [pdf]
+---
+
+```{r packages}
+#| message: FALSE
+#| echo: FALSE
+# load packages
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(here)
+library(readr)
+library(janitor)
+library(lme4)
+library(lmerTest)
+library(broom)
+library(igraph)
+library(tibble)
+library(FrF2)
+library(future)
+library(MOODE)
+library(patchwork)
+library(gt)
+options(knitr.kable.NA = '')
+```
+
+# Introduction
+
+## Welcome
+
+The main focus is on two areas - experimental design under treatment interference and multi-objective experimental design - that are active research areas. 
+
+![](../images/spectral_clustering.jpg){fig-align="center"}
+
+::: {style="font-size: 75%;"}
+Figure attribution: Subset of the [Facebook network](http://snap.stanford.edu/data/egonets-Facebook.html) from the Stanford Data Collection.
+:::
+
+## Common DoE assumptions
+
+To a greater or lesser degree, the ideas and principles from Weeks 1-3 are dependent on a number of assumptions holding:
+
+- that the expected response from a given unit only depends on the treatment applied to that unit, and not on the treatments applied to any other units;
+
+- for factorial, response surface and optimal designs, that a reasonable approximating statistical model can be specified;
+
+- for optimal designs, that the aim of the experiment can be neatly encapsulated in a single mathematical expression or objective function.
+
+## Relaxing the assumptions
+
+This week, we will focus on approaches that allow us to relax one or the other of these assumptions:
+
+- in Part 1 (Experiments with interference), we will introduce methods for designing and analysing experiments when *treatment interference* is anticipatedl
+
+- in Part 2 (Multi-objective experimentation), we will introduce *multi-objective* (compound) design optimality criteria that address multiple experimental aims simultaneously. 
+
+# Experiments with interference
+
+## SUTVA
+
+Standard model for analysing a designed experiment,
+
+$$
+y_{i} = \mu + \tau_{r(i)} + \varepsilon_i\,,
+$$ {#eq-additive-model}
+
+with the aim of estimating treatment differences $\tau_j - \tau_k$. Here, $r(i) \in \{1,\ldots,t\}$ indicates which treatment was allocated to the $i$th unit ($i = 1,\ldots,n$).
+
+This model makes the **stable unit treatment value assumption (SUTVA)**, which states that the response from any particular unit is unaffected by the assignment of treatments to other units [@cox1958, §2.4].
+
+## Example experiments
+
+1. A clinical trial split into (time) periods. Within a period, each patient will be assigned one of the treatments. Across the whole experiment, each patient will be assigned all the treatments.
+
+2. An agricultural experiment with the field available for the experiment is split into different plots, with one treatment assigned to each plot.
+
+3. A marketing experiment to assess the effectiveness of different adverts with each user on (a subset of) the platform will be shown one of a number of different adverts.
+
+## Treatment interference
+
+What do all three of these experiments have in common? Possible **treatment interference** (or treatment carryover or spillover).
+
+1. The clinical response obtained from the application of a treatment in a given period may also be affected by the treatment applied in the preceding period.
+
+1. The response, e.g., crop yield, from a given plot may be affected by the variety of wheat applied to neighbouring plots, due to shading or attractiveness to pests.
+
+1. The response from a particular social media user to an advert may be influenced by the adverts seen by their connections or friends.
+
+##
+
+Ignoring substantial treatment interference, as in model ([-@eq-additive-model]), can lead to biased estimates of differences between the **direct** treatment effects $t_r$.
+
+Mitigate of treatment interference **may** be possible, e.g., by adding "wash-out" periods in the clinical trial or "guard plots" in the agricultural experiment. 
+
+But in many cases this may not be possible (or ethical) or there may be interest in the **indirect** effect of each treatment; for example, the **viral** effect of the adverts in the marketing experiment.
+
+Hence, it is of interest to study designs and models which account for treatment interference.
+
+## Cross-over trials
+
+In a **cross-over trial**, each subject is assigned a sequence of treatments across different time periods. Interest is in comparing individual treatments, not sequences, and the experimental units are the periods within each subject.
+
+Cross-over trials are common in studies of chronic conditions, where repeated treatment is required. 
+
+Advantages include 
+
+ - each subject acts as their own control;
+ - and treatment comparisons can be made "within subject".
+
+See @jk2015 and @bd2015.
+ 
+## Order and carry-over effects
+
+However, this feature of within subject comparison can also bring disadvantages. Principally,
+
+- the **order** in which the treatments are applied may impact the outcome;
+- there may be **treatment interference** between periods of the design (typically called *carry-over* in a cross-over trial). That is, the outcome from period $i$ may depend on the treatment applied in period $i-1$ (first-order interference) or even from earlier periods.
+
+## 2x2 cross-over trial
+
+The simplest form of cross-over design concerns $t=2$ treatments and $p=2$ periods.
+
+```{r}
+#| label: tbl-AB
+#| tbl-cap: Sequences for a 2x2 cross-over trial.
+AB <- data.frame(
+  sequence = rep(1:2, c(2, 2)),
+  period = rep(1:2, 2),
+  trt = c("A", "B", "B", "A")
+)
+AB |> 
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:2)),
+        align = rep("c", 3)) |>
+  kable_classic(c("striped", "hover"), full_width = F)
+```
+
+There are clearly only two possible sequences and each subject in the trial is randomised to one of the two. A wash-out period is may be inserted between the two treatment periods.
+
+## Example
+
+Investigate the efficacy of an inhaled drug (A), compared to a control (B), for patients suffering from chronic obstructive pulmonary disease (COPD). The response was the mean expiratory flow rate (PEFR) based on readings recorded each morning by the subjects. 
+
+```{r}
+#| label: tbl-pefr
+#| tbl-cap: Mean morning PEFR (L/min) from a $2\times 2$ cross-over trial [adapted from @jk2015, ch. 2]. 
+#| message: false
+pefr <- read_csv(here("data", "pefr.csv"), show_col_types = FALSE) |>
+  clean_names() |>
+  slice(1:54)
+pefr_AB <- pefr |>
+  filter(sequence == "AB")
+pefr_BA <- pefr |>
+  filter(sequence == "BA") 
+bind_cols(pefr_AB, pefr_BA) |>
+  select(c(1, 3, 4, 5, 7, 8)) |>
+  kable(col.names = rep(c("Subject", "Period 1", "Period 2"), 2)) |>
+  add_header_above(c("Sequence AB" = 3, "Sequence BA" = 3)) |>
+  kable_classic(c("striped", "hover"), full_width = F)
+```
+
+## Linear model for cross-over trials
+The traditional linear model used with cross-over experiments contains terms corresponding to subjects, period, treatment and interference:
+
+$$
+\begin{split}
+y_{ij} = \mu + \alpha_i + \beta_j + \tau_{r(i,j)} + \rho_{r(i-1,j)} + \varepsilon_{ij}\,,\\ i = 1,\ldots,p;\, j = 1,\ldots, n\,,
+\end{split}
+$$ {#eq-crossmod}
+
+ - $r(i,j) \in \{1,\ldots,t\}$ denotes the treatment allocated to the $j$th subject in the $i$th period, 
+ - $\alpha_i$ is the $i$th period effect, 
+ - $\beta_j$ is the $j$th subject effect, 
+ - $\rho_{r(i-1,j)}$ is the interference (indirect, carry-over) effect, with $\rho_{r(0,j)}=0$.
+
+## Analysis of variance
+
+```{r}
+#| label: tbl-pefr-co
+#| tbl-cap: Analysis of variance from PEFR cross-over trial
+pefr_long <- pefr |> 
+  pivot_longer(cols = starts_with("period"), names_to = "period", values_to = "pefr")
+pefr_long <-  pefr_long |>
+  mutate(trt = case_when(
+    sequence == "AB" & period == "period_1" ~ "A",
+    sequence == "AB" & period == "period_2" ~ "B",
+    sequence == "BA" & period == "period_1" ~ "B",
+    .default = "A"
+    ) 
+  ) |>
+  mutate(subject = as.factor(subject))
+pefr_co <- aov(pefr ~ sequence + period + trt + Error(subject), data = pefr_long)
+tidy(pefr_co) |>
+  mutate(term = case_when(
+                          row_number() == 1 ~ "sequence (interference)",
+                          row_number() == 2 ~ "between subject residual",
+                          row_number() == 4 ~ "treatment",
+                          row_number() == 5 ~ "within subject residual",
+                          .default = term)) |>
+  select(-stratum) |>
+  mutate(across(where(is.numeric), ~ round(.x, digits = 3))) |>
+  kable(col.names = c("", "df", "Sum Sq.", "Mean Sq.", "F-value", "P-value")) |>
+    kable_classic(c("striped", "hover"), full_width = F)
+```  
+
+Notes:
+
+- the between sequence sums of squares tests $\rho_1 = \rho_2$;
+- the correct demominator sums of squares is between subjects;
+- we need the assumption of no interference to test for direct treatment effects (as we cannot have complete balance as a treatment does not follow itself).
+
+## Larger cross-over designs
+
+A **balanced** design has each treatment occuring the same number of times in each period, and each treatment following every other treatment the same number of times, with no treatment following itself. 
+
+- A $2\times 2$ trial is balanced.
+- Every pair of estimated direct treatment differences, $\hat{\tau}_k = \hat{\tau}_l$ has the same variance. 
+
+A **strongly balanced** design has every treatment followed by every other treatment, including itself. 
+
+- Direct and indirect effects are estimated independently, simplifying the analysis and interpretation, and lowering the variance of estimators of the indirect effects. 
+
+## Balanced 4x4 Latin square 
+
+```{r}
+#| label: tbl-balLS
+#| tbl-cap: Balanced Latin square design for four treatments.
+bal_ABCD <- data.frame(
+  sequence = rep(1:4, rep(4, 4)),
+  period = rep(1:4, 4),
+  trt = c("A", "D", "B", "C",
+          "B", "A", "C", "D",
+          "C", "B", "D", "A",
+          "D", "C", "A", "B")
+)
+bal_ABCD |>
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:4)),
+        align = rep("c", 5)) |>
+  kable_classic(c("striped", "hover"), full_width = F)
+```
+
+## Strongly balance extra-period design
+
+```{r}
+#| label: tbl-strbalLS
+#| tbl-cap: Strongly balanced extra-period design for four treatments.
+strbal_ABCD <- data.frame(
+  sequence = rep(1:4, rep(5, 4)),
+  period = rep(1:5, 4),
+  trt = c("A", "D", "B", "C", "C",
+          "B", "A", "C", "D", "D",
+          "C", "B", "D", "A", "A",
+          "D", "C", "A", "B", "B")
+)
+strbal_ABCD |>
+  pivot_wider(names_from = period, values_from = trt) |>
+  kable(col.names = c("Sequence", paste("Period", 1:5)),
+        align = rep("c", 6)) |>
+  kable_classic(c("striped", "hover"), full_width = F)
+```
+
+## Interference in other trials
+
+Interference can also occur in other trials, including parallel group trials without repeated treatment applications^[<https://clusterrandomisedtrials.qmul.ac.uk>]. 
+
+ - E.g., assessing public health interventions.
+
+One mitigation strategy is use of a **cluster randomised** trial (CRT).
+
+ - All subjects in a cluster or group recieve the same treatment. 
+ - Typically clusters will be designed to limit possible treatment interference between clusters.
+
+In other trials, the indirect effect of each treatment may be of interest in itself, e.g. vaccine trials
+
+- Methods are required for the design and modelling of experiments to estimate indirect and total effects [@hh2012].  
+
+## Networked experiments
+
+Experiments from outside the clinical arena can also violate SUTVA.
+
+For example, online controlled experiments on websites and social media platforms [@lssdks2024]. 
+
+- Connections between users can lead to treatment interference.
+- There could be distinct communities within the network, with more similar responses expected from users in the same community.
+
+![Subset of the [Facebook network](http://snap.stanford.edu/data/egonets-Facebook.html) from the Stanford Data Collection, Colours inducated 24 distinct blocks, or communities, of users.](../images/spectral_clustering.jpg){width=200% #fig-facebook}
+
+## Other examples
+
+```{r}
+#| label: tbl-netex
+#| tbl-cap: Examples of networked experiments.
+ex <- data.frame(
+  field = c("Marketing", "Agriculture", "Health", "Politics", "Education", "Ecology", "Law enforcement"),
+  intervention = c("Advertisement", "Pesticide", "Infection control information", "Direct mailing", "Incentivised food choices", "Reward-based intervention", "Surveillance"),
+  links = c("Virtual friendships", "Geographic proximity", "Patient contacts in hospital", "Voter interactions", "Social links", "Animal interactions", "Geographical proximity"),
+  response = c("Product awareness", "Crop yield", "Disease incidence", "Voting behaviour", "Snack choice", "Reaction speed", "Crime rate")
+)
+ex |>
+  kable(
+    col.names = c("Field of study", "Intervention", "Connections", "Response")
+  ) |>
+  kableExtra::kable_classic(c("striped", "hover"), full_width = F)
+```
+
+## Graphs of designs
+
+::: {.panel-tabset}
+
+## Vertices and edges
+
+Suppose that $n$ units are formed into a network with connections representing possible treatment interference. 
+
+This network can be represented as a graph $\mathcal{G} = (\mathcal{V}, \mathcal{E})$,
+
+- vertex set $\mathcal{V}$ represents units;
+- edge set $\mathcal{E}$, of size $l$, represents the connections. 
+
+## Adjacency matrix
+
+Connections can be succinctly represented via the **adjacency matrix**. 
+
+ - $A = [A]_{jh}$, an $n\times n$ matrix with $A_{jh} = \in [0, 1]$ 
+ - Undirected graphs have $A_{jh} = A_{hj}$. 
+ - Lack of an edge between nodes $j$ and $h$ in $\mathcal{E}$ leads to $A_{jh} = A_{hj} = 0$.
+
+```{r}
+#| label: tbl-exgraph
+#| tbl-cap: Example adjacency matrix for the graph $\mathcal{G}$ in @fig-exgraph with $|\mathcal{V}| = 5$ vertices and $|\mathcal{E}| = 6$ undirected edges.
+A <- matrix(
+c(0, 1, 0, 1, 1,
+  1, 0, 1, 0, 0,
+  0, 1, 0, 1, 0,
+  1, 0, 1, 0, 1,
+  1, 0, 0, 1, 0),
+nrow = 5, byrow = T
+)
+colnames(A) <- rownames(A) <- LETTERS[1:5]
+A |>
+  kable()
+```
+
+## Blocks
+
+For some applications, necessary blocking factors may be obvious or based on covariates external to the graph, e.g., age or sex.
+
+For others, it may be necessary or desirable to base the blocks on the graph structure itself, e.g., using spectral clustering [@kgp2021].
+
+
+```{r}
+#| label: fig-exgraph
+#| fig-cap: Example graph $\mathcal{G}$ for the adajcency matrix in @tbl-exgraph with $|\mathcal{V}| = 5$ vertices and $|\mathcal{E}| = 6$ undirected edges. Colours indicate an examplar blocking into two groups.
+
+A |>
+  graph_from_adjacency_matrix(mode = "undirected") |>
+  plot(vertex.color = c("orange", "lightblue", "lightblue", "orange", "orange"))  
+```
+
+:::
+
+## Linear network model
+
+The adjacency matrix can be used to incorporate indirect treatment effects into a model for the experiment [@pgs2016, @kgp2021]: 
+
+$$
+\begin{split}
+y_{ij} = \mu  + \beta_i + \tau_{r(i,j)} + \sum_{g=1}^{b}\sum_{h=1}^{n_{g}} A_{\left\{ij,gh\right\}}\gamma_{r(g,h)} +\varepsilon_{ij}\,, \\ 
+\quad i=1,\ldots,b\,,\,j = 1,\ldots, n_i\,. 
+\end{split}
+$${#eq-bnm}
+
+- $\beta_i$ is the $i$th block effect;
+- $\tau_k$ and $\gamma_k$ are the direct and indirect treatment effects
+
+## Example
+
+For the graph in Figure @fig-exgraph, with adjacency matrix in @tbl-exgraph, the response from node A, the first unit in block 1, would be modelled as:
+
+$$
+y_{11} = \mu + \beta_1 + \tau_{r(1,1)} + \gamma_{r(1,2)} + \gamma_{r(1,3)} + \gamma_{r(2,1)} + \varepsilon_{11}\,,
+$$
+
+with the indirect treatment effects resulting from the edges between node A and nodes D and E (in block 1) and node B (in block 2). The linear network effects model can be estimated using least squares or maximum likelihood. 
+
+## Optimality criteria
+
+Two possible aims from the experiment are
+
+ i. estimation of pairwise differences between direct treatment effects, or
+ ii. estimate of pairwise differences between indirect treatment effects, if primary interest is in the viral effects of a treatment.
+
+In either case, design selection will be based on model ([-@eq-bnm]) with direct and indirect treatment effects being mutually adjusted.
+
+## A-optimality
+
+For efficient estimation of direct treatment differences, designs are sought that minimise the average variance of the pairwise differences:
+
+$$
+\phi_{\tau}=\frac{2}{t(t-1)} \sum_{s=1}^{t-1}\sum_{s'=s+1}^t \text{var}(\widehat{\tau_s-\tau_{s'}})\,.
+$${#eq-phi1}
+
+Similarly, we can define a criterion for efficient estimation of indirect treatment differences, that minimises
+
+$$
+\phi_{\gamma}=\frac{2}{t(t-1)} \sum_{s=1}^{t-1}\sum_{s'=s+1}^t \text{var}(\widehat{\gamma_s-\gamma_{s'}})\,.
+$${#eq-phi2}
+
+Designs can be found via application of standard optimisation algorithms, such as point exchange [@cn1980].
+
+## Example - co-authorship network
+
+Links between academics within a university research group [@kgp2021].
+
+- 22 nodes, split into three blocks, and 27 edges. 
+- Interest lies in estimating the effects of two treatments.
+
+![Block designs for a co-authorship network with colours indicating blocks (identified via spectral clustering) and plotting symbol indicating allocation to treatment 1 or 2. Left: optimal design for estimation of direct effects. Right: optimal design for estimation of indirect effects.](../images/alloc_LNBD_22vert.jpg){#fig-coauthor}
+
+## Notes
+
+**Estimating direct effects**
+
+- The $\phi_{\tau}$-optimal design is balanced, with equal replication of each treatment. 
+- Treatment allocation is also balanced within each block. 
+- Nodes allocated to each treatment have similar first- and second-order degrees 
+
+**Estimating indirect effects**
+
+- Treatment allocation in the $\phi_{\gamma}$-optimal design is highly dependent on the network.
+- Highly connected nodes tend to receive a different treatment from their surrounding, less connected, nodes.
+
+## Comparisons to other designs
+
+Quantitative comparisons can be made between the block network designs (BNDs) from @fig-coauthor and the optimal designs that would result from models that 
+
+- ignore blocks and network structure (CRD: completely randomised design);
+- ignore network structure (RBD: randomised block design);
+- ignore blocks (LND: linear network design).
+
+## Efficiencies for estimating direct effects
+
+Efficiencies are calculated **within row**.
+
+```{r}
+#| label: tbl-coauthor-direct
+#| tbl-cap: Efficiencies for estimating the direct treatment effects for designs with and without blocking and/or indirect effects under different model assumptions.
+dir_eff <- data.frame(
+  eff = c(1, 1, 1, 1, .89, 1, 0.68, 1, 0.86, 0.83, 1, 1, 0.73, 0.81, 0.5, 1),
+  Model = rep(c("CRM", "RBM", "LNM", "BNM"), rep(4, 4)),
+  des = rep(c("CRD", "RBD", "LND", "BND"), 4)
+)
+dir_eff |> 
+  pivot_wider(names_from = des, values_from = eff) |>
+  kable() |>
+  add_header_above(c("", "Designs" = 4))
+```
+
+## Notes
+
+Two features stand out from @tbl-coauthor-direct.
+
+ i. The importance of including blocks in the optimal design, if they are present in the model. For example, the LND is only 50% efficient if blocks are added to the model. This is because balance within blocks is not achieved by the LND.
+ ii. The substantial loss in efficiency if network effects are excluded; e.g., the CRD and RBD lose around ~15-25% efficiency compared to the LND/BND. 
+
+## Efficiencies for estimating indirect effects 
+ 
+The loss of efficiency for designs that ignore network structure is now large (>80%).
+
+```{r}
+#| label: tbl-coauthor-indirect
+#| tbl-cap: Efficiencies for estimating the indirect treatment effects for designs with and without blocking under different model assumptions.
+dir_eff <- data.frame(
+  eff = c(0.16, 0.12, 1, 0.64, 0.16, 0.16, 0.39, 1),
+  Model = rep(c("LNM", "BNM"), rep(4, 2)),
+  des = rep(c("CRD", "RBD", "LND", "BND"), 2)
+)
+dir_eff |> 
+  pivot_wider(names_from = des, values_from = eff) |>
+  kable() |>
+  add_header_above(c("", "Designs" = 4))
+```
+
+## Case study - agricultural experiment
+
+The impact of *neighbouring* plots in field trials has been widely considered, including through study of indirect treatment effects [@bk1986]. 
+
+![Example field layout, as used at Rothamsted](../images/farm.jpg){#fig-farm}
+
+A typical layout of a field trial is shown in @fig-farm, clearly showing the proximity of neighbouring plots.
+
+## Row-column experiment
+
+Experiments conducted at Rothamsted to study the differences in natural cereal aphid colonization [@kgpm2023].
+
+- 21 different wheat varieties.
+- Units arranged in a $14\times 6$ grid of 1m x 1m plots.
+- There are sufficient plots for each treatment to be replicated four times. 
+- Data from 2016 experiment.
+
+## Layout and 2016 experiment
+
+![Plot layout for the agricultural example with treatment allocation from the 2016 design. Numbers indicated treatments allocated to each plot.](../images/plots.jpg){#fig-plots}
+
+## Treatment interference
+
+Treatment interference was thought possible due to the differing levels of susceptibility of different varieties and the strong possibility of aphids moving from plot to plot. 
+
+Differing structures governing this interference were considered, represented as graphs.
+
+![Network and optimal design for the wheat field trial. Numbers indicated treatments allocated to each plot.](../images/kings.jpg){#fig-plots}
+
+## Statistical model
+
+In addition to direct and indirect treatment effects, the analysis of the experiment needed to account for the spatial structure through the inclusion of blocking factors and row-column effects.
+
+$$
+\begin{aligned}
+y_j &=\mu+\tau_{r(j)}+ R_i+C_k+(RC)_{ik}+r_{ig}+c_{kh} \\
+& +\left(rC\right)_{igk}+\left(Rc\right)_{ikh} +\sum_{j'} A_{jj'}  \gamma_{r(j')} + \varepsilon_{j}\,,
+\end{aligned}
+$${#eq-rc}
+
+with $R$, $C$ and $RC$ representing the effects of super-rows and super-columns, and their interaction (super-blocks). Effects $r$ and $c$ are of rows and columns nested inside super-blocks.
+
+## Analysis of variance from 2016 experiment
+
+|   | Sum Sq | Mean Sq | NumDF | DenDF | F-value | p-value |
+| - |------ | ------- | ----- | ----- | ------- | ------- |
+| Comparison 1 | | | | | | |
+| Indirect effect | 32.58 | 1.63 | 20.00 | 31.76 | 3.24 | 0.0015 | 
+| Direct effect | 19.34 | 0.97 | 20.00 | 35.48 | 1.92 | 0.0437 | 
+| Comparison 2| | | | | | |
+| Direct effect | 32.20 | 1.61 | 20.00 | 35.85 | 3.20 | 0.0012 | 
+| Indirect effect | 20.41 | 1.02 | 20.00 | 32.09 | 2.03 | 0.0361 | 
+
+: Analysis with network effects for the 2016 wheat experiment. {#tbl-kings_analysis .striped .hover tbl-colwidths="[33,11,11,11,11,11,11]"}
+
+## Optimal design for estimating direct effects
+
+![Network and optimal design for the wheat field trial. Numbers indicated treatments allocated to each plot.](../images/kings.jpg){#fig-plots2}
+
+## Notes and comparisons
+
+- There is a good spatial spread of treatments; 
+- but it is also quite common for pairs of connected units to share a treatment. 
+
+Both these features have been observed in previous row-column and network designs; see @freeman1979, @pgs2016 and @kgp2021.
+
+A comparison to designs found under different models shows a big loss in efficiency. The efficiency of the 2016 design (a resolvable row-column design) was 0.5.
+
+```{r}
+#| label: tbl-fieldeff
+#| tbl-cap: Efficiencies of optimal designs for various submodels of (-@eq-rc) when evaluated under the full model. 
+data.frame(
+  eff = 254 / c(642, 589, 550, 499, 549, 506, 353, 254), 
+  design = c("CRD", "RBD", "RCD", "BRCD", "LND", "BND", "RCND", "BRCND")
+) |> 
+  pivot_wider(names_from = design, values_from = eff) |>
+  mutate(rname = "Efficiency") |>
+  column_to_rownames("rname") |>
+  kable(digits = 2) |>
+  add_header_above(c("","Designs" = 8)) 
+```
+
+# Multi-objective designs
+
+## Model uncertainty
+
+Various authors have written summary "checklists" for planning experiments, with items similar to "define the objectives" and "specify the model" [e.g., @dvd2017]. In general, such lists recognise
+
+ a. the conflicting nature of many of the former;
+ b. the a priori uncertainty in the latter.
+
+We focus on using multi-objective optimal designs [@eg2023] to address uncertainty in the assumed by model by combing individual criteria for
+
+- inference for an assumed model;
+- the ability to identify model lack-of-fit;
+- minimum mean squared error, including bias from model misspecification. 
+
+## Response surface designs  
+
+We will discuss such methods in the context of **response surface models** of the form
+
+$$
+\begin{split}
+    Y_i & = \beta_0 + \sum_{j = 1} ^ {p} \beta_j x_{ij} + \varepsilon_{i} \\
+    & = \beta_0 + \boldsymbol{x}_{i1}^{\mathrm{T}}\boldsymbol{\beta}_1 + \varepsilon_{i}\,,
+\end{split}
+$${#eq-rsm}
+
+- $\beta_0$ and $\boldsymbol{\beta}_1^{\mathrm{T}} = (\beta_1, \ldots, \beta_{p})$ are unknown parameters.
+- $\boldsymbol{x}_{i1}^{\mathrm{T}} = (x_{i1}, \ldots, x_{ip})$ holds values of the $p$ predictors for the $i$th run.
+
+## Standard optimality criteria
+
+The most common design selection criteria aim at estimation for model (-@eq-rsm) with $\sigma^2$ assumed known.
+
+**D-optimality**
+$$
+\phi_{D}(\mathcal{D}) =  \left|\left[X_1^{\mathrm{T}}\left(I_n - \frac{1}{n}J_n\right)X_1\right]^{-1}\right|\,.\\
+$$
+**L-optimality**
+$$
+\phi_L(\mathcal{D}) =  \text{tr}\left\{L^{\mathrm{T}}\left(X_1^{\mathrm{T}}(I_n - \frac{1}{n}J_n)X_1\right)^{-1}L\right\}\,.
+$$
+
+Here, we treat the intercept $\beta_0$ as a nuisance parameter.
+
+Both criteria assume model (-@eq-rsm) is correctly specified.
+
+## Primary and potential terms
+
+@Box1959 introduced the idea of discrepancy between the assumed response surface model and an encompassing "true" model:
+
+$$
+\begin{split}
+    Y_i & = \beta_0 + \sum_{j = 1} ^ {p} \beta_j x_{ij} + \sum_{j = p+1} ^ {p+q} \beta_j x_{ij} +\varepsilon_i \\
+    & = \beta_0 + \boldsymbol{x}_{i1}^{\mathrm{T}}\boldsymbol{\beta}_1 + \boldsymbol{x}_{i2}^{\mathrm{T}}\boldsymbol{\beta}_2 + \varepsilon_i\,,
+\end{split}
+$${#eq-primary_potential_model}
+
+where $\boldsymbol{x}_{i2}^{\mathrm{T}} = (x_{i(p+1)}, \ldots, x_{i(p+q)})$ holds the additional $q$ polynomial terms, with associated parameters $\boldsymbol{\beta}_2^{\mathrm{T}} = (\beta_{p+1}, \ldots, \beta_{p+q})$. 
+
+@DuMouchel1994 labelled the polynomial terms in the assumed model as **primary** and the additional terms in the encompassing model as **potential**.
+
+## Mean squared error
+
+One desirable aim is to be able to estimate $\boldsymbol{\beta}_1$ from model (-@eq-rsm) protected from contamination from the potential terms. 
+
+Define the MSE matrix for $\hat{\boldsymbol{\beta}}$ [@FedorovMontepiedra1997]:
+
+$$
+\begin{split}
+\text{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)& = \mathtt{E}_{\boldsymbol{Y}}[(\hat{\boldsymbol{\beta}}_1 -\boldsymbol{\beta}_1)(\hat{\boldsymbol{\beta}}_1 - \boldsymbol{\beta})_1^\top]\\
+& = \sigma^2[X_1^{\mathrm{T}} (I_n - \frac{1}{n}J_n) X_1]^{-1} + A_1\boldsymbol{\beta}_2\boldsymbol{\beta}_2^{\mathrm{T}} A_1^{\mathrm{T}}\,, 
+\end{split}
+$${#eq-MSE}
+
+where 
+
+$$
+A_1 = \left[X_1^{\mathrm{T}} \left(I_n - \frac{1}{n}J_n\right) X_1\right]^{-1}X_1^{\mathrm{T}} \left(I_n - \frac{1}{n}J_n\right)X_2
+$$ 
+
+is the $p\times q$ alias matrix between the primary and potential terms (excluding the intercept).
+
+## MSE(L) optimality
+
+An analogy of variance-based alphabetic criteria is to consider functionals of this matrix. 
+
+$$
+\begin{split}
+\phi_{MSE(L)}(\mathcal{D}) & = E\left\{\text{trace}\left[\text{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)\right]\right\} \\ 
+& = \text{trace}\left\{E\left[\text{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)\right]\right\} \\
+& = \text{trace}\left[\sigma^2M^{-1} + E\left(A_1\boldsymbol{\beta}_2\boldsymbol{\beta}_2^\top A_1^\top\right)\right] \\
+& = \sigma^2\text{trace}\left[M^{-1} + \tau^2 A_1^\top A_1\right]\,.
+\end{split}
+$$
+The expectation is taken with respect to a normal prior distribution for 
+$\boldsymbol{\beta}_2\sim \mathcal{N}\left(\boldsymbol{0}_q, \sigma^2\tau^2I_q\right)$ for $\tau^2>0$.
+
+## Pure error criteria
+
+When uncertainty about the assumed model is being acknowledged, it is important that sufficient pure error degrees of freedom exist in the design to provide an unbiased estimator for $\sigma^2$.
+
+@GilmourandTrinca2012 suggested a class of criteria that explicitly incorporate the F-distribution quantiles on which parameter confidence regions depend.
+
+**DP-optimality**
+$$
+\phi_{(DP)_S}(\mathcal{D}) =  F_{p,d;1-\alpha}^p\phi_{D}(\mathcal{D})\,.
+$$
+
+**LP-optimality**
+$$
+\phi_{LP}(\mathcal{D}) =  F_{1,d;1-\alpha}\phi_L(\mathcal{D})\,.
+$$
+
+where $d = n-t$ is the number of replicated treatments in the experiment, $\alpha$ is a pre-chosen significance level and $F_{df1, df2; 1-\alpha}$ is the quantile of an F-distribution with $df1$ and $df2$ degrees of freedom such that the probability of being less than or equal to this quantile is $1-\alpha$. 
+
+## Model sensitivity
+
+The ability of the design to make inference about the potential terms, and hence detect any lack of fit in the direction of model (-@eq-primary_potential_model) can be quantified via functionals of $R + \frac{1}{\tau^2}I_q$, which is proportional to the posterior variance for $\boldsymbol{\beta}_2$. 
+
+**LoF-DP-optimality**
+$$
+\phi_{LoF-DP}(\mathcal{D}) = F^q_{q, d; 1-\alpha_{L}} \left|R + \frac{1}{\tau^2}I_q\right|^{-1}\,.
+$$
+**LoF-LP-optimality**
+$$
+\phi_{LoF-LP}(\mathcal{D}) = F_{1, d; 1-\alpha_{L}} \text{tr}\left\{L^\top\left(R + \frac{1}{\tau^2}I_q\right)^{-1}L\right\}\,. 
+$$
+
+Both criteria target designs with matrices $X_1$ and $X_2$ being (near) orthogonal to each other, which will also maximise the power of the lack-of-fit test for the potential terms.
+
+## MOODE
+
+Multi-objective optimal design of experiments can be achieved via a compound criterion objective function constructed via a weighted product of individual objective functions. 
+
+@eg2023 defined a trace-based compound criteria as
+
+$$
+\phi_{trace}(\mathcal{D}) = \phi_{LP}(\mathcal{D})^{\kappa_{LP}}\times \phi_{LoF-LP}(\mathcal{D})^{\kappa_{LoF-LP}} \times \phi_{MSE(L)}(\mathcal{D})^{\kappa_{MSE(L)}}\,,
+$$
+
+with all weights $\kappa \ge 0$ and $\kappa_{LP} + \kappa_{LoF-LP} + \kappa_{MSE(L)} = 1$.
+
+These compound criteria, along with their componenet criteria, are implemented in the `R` package `MOODE` [@kegt2024], available on [`CRAN`](https://cran.r-project.org/package=MOODE).
+
+## Example
+
+The 12-run Plackett-Burman design is perhaps the most widely used, and studied, non-regular fractional factorial design. 
+
+- Orthogonal estimation of the main effects of up to 11 two-level factors
+- Main effect estimator for each factor is biased by all two-factor interactions not involving that factor.
+
+We find alternative two-level designs for $k=3,\ldots,9$ factors using the trace-based compound criterion under five different sets of criteria weights.
+
+The primary model consists of all $k$ main effects, with the potential model also including all two-factor interactions. 
+
+The `MOODE` package can be used to find designs under these models and criteria.
+
+## Weights
+
+```{r}
+#| label: criteria weights
+set.seed(10122024)
+kappa2 <- matrix(
+  c(1/3, 1/3, 1/3,
+    0.25, 0.25, 0.5,
+    1, 0, 0,
+    0, 1, 0,
+    0, 0, 1,
+    0, 0, 0),
+  ncol = 3, byrow = T)    
+```
+
+| $\kappa_1$ | $\kappa_2$ | $\kappa_2$ |
+| ---------- | ---------- | ---------- |
+| 0.33 | 0.33 | 0.33 |
+| 0.25 | 0.25 | 0.5 |
+| 1 | 0 | 0 |
+| 0 | 1 | 0 |
+| 0 | 0 | 1 |
+
+: Individual criteria weights for five different compund criteria. {#tbl-weights .striped .hover}
+
+
+## Results
+
+```{r}
+#| label: design_loop
+#| cache: true
+#| message: false
+designs_pb <- list()
+mood_pb <- list()
+plan(multisession)
+for(j in 3:9) {
+  temp <- list()
+  pb <- list()
+  for(i in 1:nrow(kappa2)) {
+    if(sum(kappa2[i, ]) == 0) { 
+      X1 <- undesign(pb(nruns = 12, nfactors = j)) |>
+        mutate(across(all_of(1:j), ~ 2 * as.numeric(.x) - 3)) |>
+        mutate(trt = 1:12, intercept = rep(1, 12), .before = A)
+      temp[[i]] <- list(X1 = as.matrix(X1))
+      temp[[i]]$X2 <- model.matrix(~ (.)^2, X1)[, -(1:(j + 1))]
+    } else { 
+      pb[[i]] <- mood(K = j, Levels = 2, Nruns = 12, 
+                      criterion.choice = "MSE.L",
+                      kappa = list(kappa.LP = kappa2[i, 1], 
+                                   kappa.LoF = kappa2[i, 2], 
+                                   kappa.mse = kappa2[i, 3]), 
+                      model_terms = list(primary.model = "main_effects", 
+                                         potential.model = 
+                                                  "linear_interactions"),
+                      control = list(Nstarts = 200))
+      Search_pb <- Search(pb[[i]], parallel = TRUE, verbose = FALSE, 
+                          algorithm = "ptex")
+      temp[[i]] <- Search_pb
+    }
+  }
+  designs_pb[[j]] <- temp
+  mood_pb[[j]] <- pb
+}
+plan(sequential)  
+```
+
+```{r}
+#| label: fig-pb
+#| fig-cap: Efficiencies for MOODE and other optimal designs under different criteria.
+pb_results <- matrix(NA, nrow = nrow(kappa2) * 7, ncol = 9)
+count <- 0
+for (i in 3:9) {
+  for (j in 1:nrow(kappa2)) {
+    kappa.vec <- c(1/3, 1/3, 1/3) 
+    pb_temp <- mood(K = i, Levels = 2, Nruns = 12, criterion.choice = "MSE.L",
+                    kappa = list(kappa.LP = kappa.vec[1], 
+                                 kappa.LoF = kappa.vec[2], 
+                                 kappa.mse = kappa.vec[3]), 
+                    model_terms = list(primary.model = "main_effects", 
+                                       potential.model = "linear_interactions"))
+    pb_results[count + j, 1] <- i
+    pb_results[count + j, 2:4] <- kappa2[j, ]
+    X1 <- designs_pb[[i]][[j]]$X1
+    X2 <- designs_pb[[i]][[j]]$X2
+    critvals <- MOODE:::icriteria.mseL(X1, X2, pb_temp) 
+    pb_results[count + j, 5] <- critvals$LP
+    pb_results[count + j, 6] <- critvals$LoF
+    pb_results[count + j, 7] <- critvals$mse
+    pb_results[count + j, 8] <- critvals$df
+    pb_results[count + j, 9] <- critvals$L
+  }
+  count <- count + 6
+}
+pb_results[, 5] <- 100 * ifelse(pb_results[, 5] == 0, 0, rep(pb_results[seq(3, 42, by = 6), 5], rep(6, 7)) / pb_results[, 5]) 
+pb_results[, 6] <- 100 * ifelse(pb_results[, 6] == 0, 0, rep(pb_results[seq(4, 43, by = 6), 6], rep(6, 7)) / pb_results[, 6]) 
+pb_results[, 7] <- 100 * ifelse(pb_results[, 7] == 0, 0, rep(pb_results[seq(5, 44, by = 6), 7], rep(6, 7)) / pb_results[, 7]) 
+pb_results[, 9] <- 100 * ifelse(pb_results[, 9] == 0, 0,  ((1 / 12) * (rep(3:9, rep(6, 7))) / (rep(4:10, rep(6, 7))))  / pb_results[, 9])
+colnames(pb_results) <- c("K", "kappa1", "kappa2", "kappa3", "LP", "LoF", "MSE", "DF", "L")
+
+pb_results <- data.frame(pb_results)
+
+pb_results <- pb_results |>
+  mutate(design = case_when(
+    kappa1 == 1/3 ~ "Compound 1",
+    kappa1 == 0.25 ~ "Compound 2",
+    kappa1 == 1 ~ "LP",
+    kappa2 == 1 ~ "LoF",
+    kappa3 == 1 ~ "MSE",
+    kappa1 + kappa2 + kappa3 == 0 ~ "L"
+  ))
+
+LP_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = LP, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+MSE_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = MSE, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+DF_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = DF, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k", y = "PE")
+Ls_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = L, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+qp <- LP_plot + MSE_plot + DF_plot + Ls_plot + plot_layout(guides = "collect")
+qp
+```
+
+## Results
+
+```{r}
+#| label: tbl-pbdes
+#| tbl-cap: Compound optimal design (left) for $k=4$ two-level factors with $n=12$ runs and $\kappa_{LP} = \kappa_{LoF-LP} = \kappa_{MSE(L)} = 1/3$, along with the corresponding *LP*-optimal (middle) and *MSE(L)*-optimal (right) designs.
+
+X11 <- designs_pb[[4]][[1]]$X1
+X12 <- designs_pb[[4]][[2]]$X1
+X13 <- designs_pb[[4]][[3]]$X1
+X15 <- designs_pb[[4]][[5]]$X1
+X16 <- designs_pb[[4]][[6]]$X1
+
+pbtab <- kable(round(cbind(X11[order(X11[,1]), c(1, 3:6)], X13[order(X13[,1]), c(1, 3:6)], X15[order(X15[,1]), c(1, 3:6)]), digits = 2), 
+             col.names = 
+               rep(c("Trt label","$x_{1}$", "$x_{2}$", "$x_{3}$", "$x_{4}$"), 3),
+             escape = FALSE, booktabs = T,
+             linesep = "") 
+#|>
+#  add_header_above(header = c("Compound 1" = 5, "$LP$-optimal" = 5, "$MSE(L)$-optimal" = 5), escape = F) 
+pbtab
+```
+
+## Notes 1
+
+LP-efficiency:
+
+ - L-optimal designs lack replication, few pure error degrees of freedom and zero efficiency under LP-criterion.
+ - Similar for MSE(L)-optimal designs for larger $k$.
+ - Compound optimal designs at least 50% LP-efficient, usually more.
+ 
+MSE(L)-efficiency:
+
+ - LP-optimal and compound designs have too much replication, and low efficiency for small $k$.
+ - For larger $k$, less replication is possible and efficiency improves
+ 
+## Notes 2
+
+For $k=4$:
+
+ - LP-optimal design has only 5 distinct points (the minimum number possible), 
+ - Compound desing has 8 distinct points 
+ - MSE(L)-optimal design has 12 distinct points (obviously the maximum)
+
+None of these designs are orthogonal in the main effects, a property of the Plackett-Burman design that is compromised to obtain either 
+ 
+ - PE degrees of freedom (LP);
+ - or better robustness from the potential terms (compound and MSE(L)). 
+ 
+Compound and MSE(L)-optimal designs achieve orthogonality between the main effects and two-factor interactions, i.e. $A_1$ is a zero matrix.
+
+# Summary
+
+## Conclusions
+
+Two areas of active research:
+
+ - treatment inference;
+ - multi-objective design. 
+ 
+Both reduce the reliance on assumptions that may be unrealistic in many cases. 
+
+The topics could also be combined. e.g., multi-objective designs could be sought for networked experiments to estimate both direct and indirect treatment effects.
+
+## Further work
+
+Both topics also intersect with other research areas in design of experiments.
+
+- Networked experiments is also an active area within the causal inference community [e.g., @hh2012]; a [workshop](https://vkstats.github.io/dane2024) was held at King's in the summer of 2024. 
+
+ - Increasingly, experiments are taking place on very large networks, particularly online experimentation e.g., on social media [e.g., @nbct2020]; connections can be made to methods for subsampling large data using design of experiments principles, e.g., @yay2024.   
+
+## References
+

@@ -5,7 +5,7 @@
 .Ruserdata
 _book
 readme.qmd
-
 /.quarto/
 .httr-oauth
 .quarto
+*.Rproj

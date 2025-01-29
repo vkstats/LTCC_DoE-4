@@ -17,4 +17,4 @@ I am a [Lecturer in Statistics](https://www.kcl.ac.uk/people/vasiliki-koutra) in
 
 ## Acknowledgments {.unnumbered}
 
-These notes are largely based on joint research with [Professor Steve Gilmour](https://www.kcl.ac.uk/people/steven-gilmour), [Dr Ben Parker](https://www.brunel.ac.uk/people/ben-parker), [Dr Olga Egorova](https://www.kcl.ac.uk/people/olga-egorova), [Andrew Mead](https://www.rothamsted.ac.uk/people/andrew-mead) and [Professor Luzia Trinca](http://portaldocentes.unesp.br/portaldocentes/docentes/67765). Material in Part 2 is partly based on a short course given by Gilmour and Egorova at the [2024 Fall Technical Conference](https://falltechnicalconference.org/wp-content/uploads/2024/10/2024_FTC_Program_Book.pdf).
+These notes are largely based on joint research with [Professor Steve Gilmour](https://www.kcl.ac.uk/people/steven-gilmour), [Dr Ben Parker](https://www.brunel.ac.uk/people/ben-parker), [Dr Olga Egorova](https://www.kcl.ac.uk/people/olga-egorova), [Andrew Mead](https://www.rothamsted.ac.uk/people/andrew-mead) and [Professor Luzia Trinca](http://portaldocentes.unesp.br/portaldocentes/docentes/67765).

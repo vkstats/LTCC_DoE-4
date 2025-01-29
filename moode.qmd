@@ -1,3 +1,205 @@
-# Multi-objective optimal design {#sec-multiobj}
+# Multi-objective optimal design of experiments (MOODE) {#sec-multiobj}
 
-combining criteria for different aims (compound, constrained, Pareto fronts); MOODEs for model-robust inference; `R` package and examples.
+```{r}
+#| include: false
+#| file: packages.R
+```
+
+## Criteria for multiple objectives
+
+Compound criteria can be combined to find optimal designs under a combination of the criteria for estimation and inference, model sensitivity and model robustness described in @sec-model-robust. A compound criterion objective function is constructed via a product of individual objective functions, each raised to the power of a non-negative weight (or, equivalently, a product of weighted efficiencies). 
+
+@eg2023 defined determinant- and trace-based compound criteria as
+
+$$
+\phi_{det}(\mathcal{D}) = \phi_{DP}(\mathcal{D})^{\kappa_{DP}}\times \phi_{LoF-DP}(\mathcal{D})^{\kappa_{LoF-DP}} \times \phi_{MSE(D)}(\mathcal{D})^{\kappa_{MSE(D)}}
+$${#eq-MSE-compound-D}
+
+and
+
+$$
+\phi_{trace}(\mathcal{D}) = \phi_{LP}(\mathcal{D})^{\kappa_{LP}}\times \phi_{LoF-LP}(\mathcal{D})^{\kappa_{LoF-LP}} \times \phi_{MSE(L)}(\mathcal{D})^{\kappa_{MSE(L)}}\,,
+$${#eq-MSE-compound-L}
+
+respectively, with all weights $\kappa \ge 0$, $\kappa_{DP} + \kappa_{LoF-DP} + \kappa_{MSE(D)} = 1$ and $\kappa_{LP} + \kappa_{LoF-LP} + \kappa_{MSE(L)} = 1$.
+
+These compound criteria, along with their componenet criteria, are implemented in the `R` package `MOODE` [@kegt2024], available on [`CRAN`](https://cran.r-project.org/package=MOODE).
+ 
+ 
+## MOODE for model-robust inference
+
+To demonstrate MOODE methodology and its implementation in `R`, we consider an example based around the 12-run Plackett-Burman design. This design is perhaps the most widely used, and studied, non-regular fractional factorial design. It can accommodate up to 11 two-level factors for the orthogonal estimation of main effects. The main effect estimator for each factor is biased by all two-factor interactions not involving that factor, with aliasing coefficients (entries of $A_1$) given by $\pm 1/3$.
+
+Here, we find alternative two-level designs for $k=3,\ldots,9$ factors using the trace-based compound criterion that minimizes (-@eq-MSE-compound-L), under five different sets of criteria weights (@tbl-weights). We will also compare against the Placket-Burman designs for each value of $k$, which are $L$-optimal under a main-effects model.
+
+| $\kappa_1$ | $\kappa_2$ | $\kappa_2$ |
+| ---------- | ---------- | ---------- |
+| 0.33 | 0.33 | 0.33 |
+| 0.25 | 0.25 | 0.5 |
+| 1 | 0 | 0 |
+| 0 | 1 | 0 |
+| 0 | 0 | 1 |
+
+: Individual criteria weights for five different compund criteria. {#tbl-weights .striped .hover}
+
+```{r}
+#| label: criteria weights
+set.seed(10122024)
+kappa2 <- matrix(
+  c(1/3, 1/3, 1/3,
+    0.25, 0.25, 0.5,
+    1, 0, 0,
+    0, 1, 0,
+    0, 0, 1,
+    0, 0, 0),
+  ncol = 3, byrow = T)    
+```
+
+The primary model considered consists of all $k$ main effects, corresponding to typical use of a Plackett-Burman design, with the potential model also including all two-factor interactions. The `MOODE` package can be used to find designs under these models and criteria.
+
+```{r}
+#| label: design_loop
+#| cache: true
+#| message: false
+designs_pb <- list()
+mood_pb <- list()
+plan(multisession)
+for(j in 3:9) {
+  temp <- list()
+  pb <- list()
+  for(i in 1:nrow(kappa2)) {
+    if(sum(kappa2[i, ]) == 0) { 
+      X1 <- undesign(pb(nruns = 12, nfactors = j)) |>
+        mutate(across(all_of(1:j), ~ 2 * as.numeric(.x) - 3)) |>
+        mutate(trt = 1:12, intercept = rep(1, 12), .before = A)
+      temp[[i]] <- list(X1 = as.matrix(X1))
+      temp[[i]]$X2 <- model.matrix(~ (.)^2, X1)[, -(1:(j + 1))]
+    } else { 
+      pb[[i]] <- mood(K = j, Levels = 2, Nruns = 12, 
+                      criterion.choice = "MSE.L",
+                      kappa = list(kappa.LP = kappa2[i, 1], 
+                                   kappa.LoF = kappa2[i, 2], 
+                                   kappa.mse = kappa2[i, 3]), 
+                      model_terms = list(primary.model = "main_effects", 
+                                         potential.model = 
+                                                  "linear_interactions"),
+                      control = list(Nstarts = 200))
+      Search_pb <- Search(pb[[i]], parallel = TRUE, verbose = FALSE, 
+                          algorithm = "ptex")
+      temp[[i]] <- Search_pb
+    }
+  }
+  designs_pb[[j]] <- temp
+  mood_pb[[j]] <- pb
+}
+plan(sequential)  
+```
+
+```{r}
+#| label: fig-pb
+#| fig-cap: Efficiencies for MOODE and other optimal designs under different criteria.
+
+pb_results <- matrix(NA, nrow = nrow(kappa2) * 7, ncol = 9)
+count <- 0
+for (i in 3:9) {
+  for (j in 1:nrow(kappa2)) {
+    kappa.vec <- c(1/3, 1/3, 1/3) 
+    pb_temp <- mood(K = i, Levels = 2, Nruns = 12, criterion.choice = "MSE.L",
+                    kappa = list(kappa.LP = kappa.vec[1], 
+                                 kappa.LoF = kappa.vec[2], 
+                                 kappa.mse = kappa.vec[3]), 
+                    model_terms = list(primary.model = "main_effects", 
+                                       potential.model = "linear_interactions"))
+    pb_results[count + j, 1] <- i
+    pb_results[count + j, 2:4] <- kappa2[j, ]
+    X1 <- designs_pb[[i]][[j]]$X1
+    X2 <- designs_pb[[i]][[j]]$X2
+    critvals <- MOODE:::icriteria.mseL(X1, X2, pb_temp) 
+    pb_results[count + j, 5] <- critvals$LP
+    pb_results[count + j, 6] <- critvals$LoF
+    pb_results[count + j, 7] <- critvals$mse
+    pb_results[count + j, 8] <- critvals$df
+    pb_results[count + j, 9] <- critvals$L
+  }
+  count <- count + 6
+}
+pb_results[, 5] <- 100 * ifelse(pb_results[, 5] == 0, 0, rep(pb_results[seq(3, 42, by = 6), 5], rep(6, 7)) / pb_results[, 5]) 
+pb_results[, 6] <- 100 * ifelse(pb_results[, 6] == 0, 0, rep(pb_results[seq(4, 43, by = 6), 6], rep(6, 7)) / pb_results[, 6]) 
+pb_results[, 7] <- 100 * ifelse(pb_results[, 7] == 0, 0, rep(pb_results[seq(5, 44, by = 6), 7], rep(6, 7)) / pb_results[, 7]) 
+pb_results[, 9] <- 100 * ifelse(pb_results[, 9] == 0, 0,  ((1 / 12) * (rep(3:9, rep(6, 7))) / (rep(4:10, rep(6, 7))))  / pb_results[, 9])
+colnames(pb_results) <- c("K", "kappa1", "kappa2", "kappa3", "LP", "LoF", "MSE", "DF", "L")
+
+pb_results <- data.frame(pb_results)
+
+pb_results <- pb_results |>
+  mutate(design = case_when(
+    kappa1 == 1/3 ~ "Compound 1",
+    kappa1 == 0.25 ~ "Compound 2",
+    kappa1 == 1 ~ "LP",
+    kappa2 == 1 ~ "LoF",
+    kappa3 == 1 ~ "MSE",
+    kappa1 + kappa2 + kappa3 == 0 ~ "L"
+  ))
+
+LP_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = LP, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+MSE_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = MSE, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+DF_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = DF, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k", y = "PE")
+Ls_plot <- pb_results |>
+  subset(K < 11) |>
+  ggplot(aes(x = K, y = L, colour = design, shape = design)) +
+  geom_jitter(height = 0, width = .1) +
+  labs(x = "k") +
+  scale_y_continuous(breaks = c(0, 25, 50, 75, 100), 
+                     limits = c(0, 130))
+qp <- LP_plot + MSE_plot + DF_plot + Ls_plot + plot_layout(guides = "collect")
+qp
+```
+
+The efficiencies of the resulting designs are displayed in @fig-pb under the *LP*-, *MSE(L)*- and *L*-criteria, along with the pure error (PE) degrees of freedom. As noted above, the *L*-optimal designs are simply 12-run Plackett-Burman designs (subsets of columns of the full designs). These designs tend to lack replication, and hence have few or no PE degrees of freedom. This lack of PE degrees of freedom leads to zero efficiency under the *LP*-criterion. For $k>4$, the *MSE(L)*-optimal designs also lack pure error degrees of freedom, leading to zero *LP*-efficiency. The compound designs achieve a minimum of 50% *LP*-efficiency, and typically achieve somewhat higher, especially for larger numbers of factors. They tend to have four PE degrees of freedom when possible, dropping as the number of factors increases (when the fixed experiment size limits the number of degrees of freedom possible). Also note that for $k=7$, the algorithm found a better design under the *LP*-criterion when searching for the compound designs; this indicates the difficulty sometimes found in finding "pure error" optimal designs, and could possibly be mitigated by more random starts or a more sophisticated choice of starting designs. 
+
+We see more complex patterns under the *MSE(L)*-criterion. When $k$ is smaller, there is very much less replication in the *MSE(L)*-optimal designs than for the *LP*-optimal designs, leading to low *MSE(L)*-efficiency for these latter designs. The compound designs start with very high efficiency for $k=3,4$ but they both maintain replication and PE degrees of freedom for $k=5,6$ leading to much lower efficiency. As $k$ increases, the scope for replication decreases due to the fixed experiment size, and the efficiency of the *LP*-optimal and compound design improves. The *L*-optimal designs perform poorly under the *MSE(L)*-criterion. However, it should be noted that there are multiple choices of the subsets of columns of the Plackett-Burman design, each of which is *L*-optimal but may have quite different performance under the other criteria.
+
+Under *L*-optimality, efficiencies for all designs, excluding the LoF design, lie above 50%, with highest efficiencies being for $k=3$. The LoF designs tend to perform poorly under all other criteria for $k>3$, and in fact the designs found under *LP*-optimality typically had LoF efficiency near or at 100%. Conversely, for these limited run sizes and low run-size to number-of-factors ratios, the designs which were optimal under both the *LP*- and LoF-criteria were never found from directly optimizing the LoF criteria.
+
+In general, the F-quantiles in the *LP*-optimality are large for the small PE degrees of freedom possible here. Hence for small values of $k$, where replication is possible, the *LP*-designs are dominated by this quantile, and we see poorer performance of these designs under the *MSE(L)*-criterion. For larger values of $k$, only very limited replication is possible and so the designs, and their performances under different criteria, tend to converge.
+
+The compound design for $\kappa_{LP} = \kappa_{LoF-LP} = \kappa_{MSE(L)} = 1/3$ and $k=4$ is given in @tbl-pbdes, together with the corresponding *LP*- and *MSE(L)*-optimal designs. The relative importance of replication to these three criteria is clear, with the *LP*-optimal design having only 5 distinct points (the minimum number possible), compared to 8 distinct points for the compound design and 12 (obviously the maximum) for the *MSE(L)*-optimal design. The compound design only includes treatments also in the other two designs. None of these designs are orthogonal in the main effects, a property of the Plackett-Burman design that is compromised to obtain either PE degrees of freedom or, in the case of the compound and *MSE(L)*-design, better robustness from the potential terms. These latter two designs achieve orthogonality between the main effects and two-factor interactions, i.e. $A_1$ is a zero matrix. Of course, the relative importance of the aliasing is controlled by the choice of $\tau^2$, the prior variance for the potential terms, which is here set to the default of $\tau^2=1$. 
+
+```{r}
+#| label: tbl-pbdes
+#| tbl-cap: Compound optimal design (left) for $k=4$ two-level factors with $n=12$ runs and $\kappa_{LP} = \kappa_{LoF-LP} = \kappa_{MSE(L)} = 1/3$, along with the corresponding *LP*-optimal (middle) and *MSE(L)*-optimal (right) designs.
+
+X11 <- designs_pb[[4]][[1]]$X1
+X12 <- designs_pb[[4]][[2]]$X1
+X13 <- designs_pb[[4]][[3]]$X1
+X15 <- designs_pb[[4]][[5]]$X1
+X16 <- designs_pb[[4]][[6]]$X1
+
+pbtab <- kable(round(cbind(X11[order(X11[,1]), c(1, 3:6)], X13[order(X13[,1]), c(1, 3:6)], X15[order(X15[,1]), c(1, 3:6)]), digits = 2), 
+             col.names = 
+               rep(c("Trt label","$x_{1}$", "$x_{2}$", "$x_{3}$", "$x_{4}$"), 3),
+             escape = FALSE, booktabs = T,
+             linesep = "") 
+#|>
+#  add_header_above(header = c("Compound 1" = 5, "$LP$-optimal" = 5, "$MSE(L)$-optimal" = 5), escape = F) 
+pbtab
+```
+
+
+ 
