@@ -1,6 +1,6 @@
 ---
 title: "LTCC Design of Experiments"
-subtitle: "Week 4: Interence and Multi-objective Experimentation"
+subtitle: "Week 4: Interference and Multi-objective Experimentation"
 author: "Vasiliki Koutra"
 format: 
   html:
@@ -71,7 +71,7 @@ To a greater or lesser degree, the ideas and principles from Weeks 1-3 are depen
 
 This week, we will focus on approaches that allow us to relax one or the other of these assumptions:
 
-- in Part 1 (Experiments with interference), we will introduce methods for designing and analysing experiments when *treatment interference* is anticipatedl
+- in Part 1 (Experiments with interference), we will introduce methods for designing and analysing experiments when *treatment interference* is anticipated;
 
 - in Part 2 (Multi-objective experimentation), we will introduce *multi-objective* (compound) design optimality criteria that address multiple experimental aims simultaneously. 
 
@@ -93,9 +93,9 @@ This model makes the **stable unit treatment value assumption (SUTVA)**, which s
 
 1. A clinical trial split into (time) periods. Within a period, each patient will be assigned one of the treatments. Across the whole experiment, each patient will be assigned all the treatments.
 
-2. An agricultural experiment with the field available for the experiment is split into different plots, with one treatment assigned to each plot.
+2. An agricultural experiment with the field available for the experiment is split into different plots, with one treatment (e.g, wheat variety) assigned to each plot.
 
-3. A marketing experiment to assess the effectiveness of different adverts with each user on (a subset of) the platform will be shown one of a number of different adverts.
+3. A marketing experiment to assess the effectiveness of different adverts with each user on (a subset of) a social media platform will be shown one of a number of different adverts.
 
 ## Treatment interference
 
@@ -109,7 +109,7 @@ What do all three of these experiments have in common? Possible **treatment inte
 
 ##
 
-Ignoring substantial treatment interference, as in model ([-@eq-additive-model]), can lead to biased estimates of differences between the **direct** treatment effects $t_r$.
+Ignoring substantial treatment interference, as in model ([-@eq-additive-model]), can lead to biased estimates of differences between the **direct** treatment effects $\tau_j$.
 
 Mitigate of treatment interference **may** be possible, e.g., by adding "wash-out" periods in the clinical trial or "guard plots" in the agricultural experiment. 
 
@@ -261,7 +261,7 @@ bal_ABCD |>
   kable_classic(c("striped", "hover"), full_width = F)
 ```
 
-## Strongly balance extra-period design
+## Strongly balanced extra-period design
 
 ```{r}
 #| label: tbl-strbalLS
@@ -338,6 +338,25 @@ This network can be represented as a graph $\mathcal{G} = (\mathcal{V}, \mathcal
 - vertex set $\mathcal{V}$ represents units;
 - edge set $\mathcal{E}$, of size $l$, represents the connections. 
 
+## Graph
+
+```{r}
+#| label: fig-exgraph0
+#| fig-cap: Example graph $\mathcal{G}$ for the adajcency matrix in @tbl-exgraph with $|\mathcal{V}| = 5$ vertices and $|\mathcal{E}| = 6$ undirected edges.
+A <- matrix(
+c(0, 1, 0, 1, 1,
+  1, 0, 1, 0, 0,
+  0, 1, 0, 1, 0,
+  1, 0, 1, 0, 1,
+  1, 0, 0, 1, 0),
+nrow = 5, byrow = T
+)
+colnames(A) <- rownames(A) <- LETTERS[1:5]
+A |>
+  graph_from_adjacency_matrix(mode = "undirected") |>
+  plot()  
+```
+
 ## Adjacency matrix
 
 Connections can be succinctly represented via the **adjacency matrix**. 
@@ -349,15 +368,6 @@ Connections can be succinctly represented via the **adjacency matrix**.
 ```{r}
 #| label: tbl-exgraph
 #| tbl-cap: Example adjacency matrix for the graph $\mathcal{G}$ in @fig-exgraph with $|\mathcal{V}| = 5$ vertices and $|\mathcal{E}| = 6$ undirected edges.
-A <- matrix(
-c(0, 1, 0, 1, 1,
-  1, 0, 1, 0, 0,
-  0, 1, 0, 1, 0,
-  1, 0, 1, 0, 1,
-  1, 0, 0, 1, 0),
-nrow = 5, byrow = T
-)
-colnames(A) <- rownames(A) <- LETTERS[1:5]
 A |>
   kable()
 ```
@@ -382,7 +392,7 @@ A |>
 
 ## Linear network model
 
-The adjacency matrix can be used to incorporate indirect treatment effects into a model for the experiment [@pgs2016, @kgp2021]: 
+The adjacency matrix can be used to incorporate indirect treatment effects into a model for the experiment [@pgs2016; @kgp2021]: 
 
 $$
 \begin{split}
@@ -396,7 +406,7 @@ $${#eq-bnm}
 
 ## Example
 
-For the graph in Figure @fig-exgraph, with adjacency matrix in @tbl-exgraph, the response from node A, the first unit in block 1, would be modelled as:
+For the graph in @fig-exgraph, with adjacency matrix in @tbl-exgraph, the response from node A, the first unit in block 1, would be modelled as:
 
 $$
 y_{11} = \mu + \beta_1 + \tau_{r(1,1)} + \gamma_{r(1,2)} + \gamma_{r(1,3)} + \gamma_{r(2,1)} + \varepsilon_{11}\,,
@@ -649,11 +659,11 @@ where $\boldsymbol{x}_{i2}^{\mathrm{T}} = (x_{i(p+1)}, \ldots, x_{i(p+q)})$ hold
 
 One desirable aim is to be able to estimate $\boldsymbol{\beta}_1$ from model (-@eq-rsm) protected from contamination from the potential terms. 
 
-Define the MSE matrix for $\hat{\boldsymbol{\beta}}$ [@FedorovMontepiedra1997]:
+Define the MSE matrix for $\hat{\boldsymbol{\beta}_1}$ [@FedorovMontepiedra1997]:
 
 $$
 \begin{split}
-\text{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)& = \mathtt{E}_{\boldsymbol{Y}}[(\hat{\boldsymbol{\beta}}_1 -\boldsymbol{\beta}_1)(\hat{\boldsymbol{\beta}}_1 - \boldsymbol{\beta})_1^\top]\\
+\text{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)& = \mathtt{E}_{\boldsymbol{Y}}[(\hat{\boldsymbol{\beta}}_1 -\boldsymbol{\beta}_1)(\hat{\boldsymbol{\beta}}_1 - \boldsymbol{\beta}_1)^\top]\\
 & = \sigma^2[X_1^{\mathrm{T}} (I_n - \frac{1}{n}J_n) X_1]^{-1} + A_1\boldsymbol{\beta}_2\boldsymbol{\beta}_2^{\mathrm{T}} A_1^{\mathrm{T}}\,, 
 \end{split}
 $${#eq-MSE}
@@ -732,7 +742,7 @@ These compound criteria, along with their componenet criteria, are implemented i
 
 The 12-run Plackett-Burman design is perhaps the most widely used, and studied, non-regular fractional factorial design. 
 
-- Orthogonal estimation of the main effects of up to 11 two-level factors
+- Orthogonal estimation of the main effects of up to 11 two-level factors.
 - Main effect estimator for each factor is biased by all two-factor interactions not involving that factor.
 
 We find alternative two-level designs for $k=3,\ldots,9$ factors using the trace-based compound criterion under five different sets of criteria weights.
@@ -756,7 +766,7 @@ kappa2 <- matrix(
   ncol = 3, byrow = T)    
 ```
 
-| $\kappa_1$ | $\kappa_2$ | $\kappa_2$ |
+| $\kappa_1$ | $\kappa_2$ | $\kappa_3$ |
 | ---------- | ---------- | ---------- |
 | 0.33 | 0.33 | 0.33 |
 | 0.25 | 0.25 | 0.5 |
@@ -764,7 +774,7 @@ kappa2 <- matrix(
 | 0 | 1 | 0 |
 | 0 | 0 | 1 |
 
-: Individual criteria weights for five different compund criteria. {#tbl-weights .striped .hover}
+: Individual criteria weights for five different compound criteria. {#tbl-weights .striped .hover}
 
 
 ## Results
@@ -915,22 +925,22 @@ LP-efficiency:
 MSE(L)-efficiency:
 
  - LP-optimal and compound designs have too much replication, and low efficiency for small $k$.
- - For larger $k$, less replication is possible and efficiency improves
+ - For larger $k$, less replication is possible and efficiency improves.
  
 ## Notes 2
 
 For $k=4$:
 
- - LP-optimal design has only 5 distinct points (the minimum number possible), 
- - Compound desing has 8 distinct points 
- - MSE(L)-optimal design has 12 distinct points (obviously the maximum)
+ - LP-optimal design has only 5 distinct points (the minimum number possible). 
+ - Compound desing has 8 distinct points.
+ - MSE(L)-optimal design has 12 distinct points (obviously the maximum).
 
 None of these designs are orthogonal in the main effects, a property of the Plackett-Burman design that is compromised to obtain either 
  
  - PE degrees of freedom (LP);
  - or better robustness from the potential terms (compound and MSE(L)). 
  
-Compound and MSE(L)-optimal designs achieve orthogonality between the main effects and two-factor interactions, i.e. $A_1$ is a zero matrix.
+Compound and MSE(L)-optimal designs achieve orthogonality between the main effects and two-factor interactions, i.e., $A_1$ is a zero matrix.
 
 # Summary
 

@@ -1,2 +1,3 @@
 bibliography:
-  - ../references.bib  
+  - ../references.bib 
+csl: ../journal-of-the-royal-statistical-society.csl  

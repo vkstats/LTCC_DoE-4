@@ -30,7 +30,7 @@ One desirable aim is to be able to estimate $\boldsymbol{\beta}_1$ from model (-
 
 $$
 \begin{split}
-\mbox{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)& = \mathtt{E}_{\boldsymbol{Y}}[(\hat{\boldsymbol{\beta}}_1 -\boldsymbol{\beta}_1)(\hat{\boldsymbol{\beta}}_1 - \boldsymbol{\beta})_1^\top]\notag\\
+\mbox{MSE}\left(\hat{\boldsymbol{\beta}}_1\right)& = \mathtt{E}_{\boldsymbol{Y}}[(\hat{\boldsymbol{\beta}}_1 -\boldsymbol{\beta}_1)(\hat{\boldsymbol{\beta}}_1 - \boldsymbol{\beta}_1)^\top]\notag\\
 & = \sigma^2[X_1^{\mathrm{T}} (I_n - \frac{1}{n}J_n) X_1]^{-1} + A_1\boldsymbol{\beta}_2\boldsymbol{\beta}_2^{\mathrm{T}} A_1^{\mathrm{T}}\,, 
 \end{split}
 $${#eq-MSE}

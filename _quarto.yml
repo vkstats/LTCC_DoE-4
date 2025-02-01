@@ -1,7 +1,7 @@
 project:
   title: LTCC_DoE-4
   type: book
-  output-dir: _book
+  output-dir: docs
 
 book:
   title: "LTCC Design of Experiments"
